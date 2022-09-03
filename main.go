@@ -20,16 +20,17 @@ func main() {
 	bucketCount := flag.Int("bucket-count", 10, "histogram bucket count")
 	axisMin := flag.Float64("axis-min", 0, "axis minimum value")
 	axisMax := flag.Float64("axis-max", 10, "axis maximum value")
+	fracPrec := flag.Uint("frac-prec", 2, "number fraction precision width")
 	fixedAxis := flag.Bool("fixed-axis", false, "if enabled, axis min and max are fixed even if some of values are out of range")
 	graphWidth := flag.Int("graph-width", 60, "graph column width including labels")
 	flag.Parse()
 
-	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis, *graphWidth); err != nil {
+	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis, *graphWidth, *fracPrec); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth int) error {
+func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth int, fracPrec uint) error {
 	values, err := readFloat64Values(os.Stdin)
 	if err != nil {
 		return err
@@ -51,7 +52,7 @@ func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth i
 		histogram.AddValue(v)
 	}
 
-	formatter := NewHistogramFormatter(histogram, defaultBarChar, graphWidth)
+	formatter := NewHistogramFormatter(histogram, defaultBarChar, graphWidth, fracPrec)
 	fmt.Print(formatter)
 
 	return nil
@@ -80,25 +81,31 @@ const barMinWidth = 10
 
 type HistogramFormatter struct {
 	histogram  *Histogram[float64]
+	fracPrec   uint
 	barChar    string
 	graphWidth int
 }
 
-func NewHistogramFormatter(histogram *Histogram[float64], barChar string, graphWidth int) *HistogramFormatter {
+func NewHistogramFormatter(histogram *Histogram[float64], barChar string, graphWidth int, fracPrec uint) *HistogramFormatter {
 	if len(barChar) == 0 {
 		panic("barChar must not be empty")
 	}
 	if graphWidth == 0 {
 		panic("graphWidth too small")
 	}
-	return &HistogramFormatter{histogram: histogram, barChar: barChar, graphWidth: graphWidth}
+	return &HistogramFormatter{
+		histogram:  histogram,
+		barChar:    barChar,
+		graphWidth: graphWidth,
+		fracPrec:   fracPrec,
+	}
 }
 
 func (h *HistogramFormatter) RangeStrings() []string {
 	tickWidth := 0
 	ticks := make([]string, len(h.histogram.rangePoints))
 	for i, tick := range h.histogram.rangePoints {
-		s := fmt.Sprintf("%.2f", tick)
+		s := fmt.Sprintf("%.*f", h.fracPrec, tick)
 		ticks[i] = s
 		tickWidth = Max(tickWidth, len(s))
 	}

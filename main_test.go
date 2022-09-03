@@ -90,7 +90,7 @@ func TestHistogramFormatter(t *testing.T) {
 			}
 		}
 
-		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40)
+		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, 2)
 		got := formatter.String()
 		want := ` 0.00 ~  1.00 [  0 ] 
  1.00 ~  2.00 [  2 ] **
