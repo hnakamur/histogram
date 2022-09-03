@@ -1,13 +1,14 @@
 package main
 
 import (
-	"log"
 	"sort"
 	"testing"
+
+	"golang.org/x/exp/slices"
 )
 
 func TestSearchFloat64s(t *testing.T) {
-	ticks := []float64{0, 1, 2, 3, 4}
+	rangePoints := []float64{0, 1, 2, 3, 4}
 	testCases := []struct {
 		input float64
 		want  int
@@ -21,7 +22,7 @@ func TestSearchFloat64s(t *testing.T) {
 		{input: 4.1, want: 5},
 	}
 	for _, tc := range testCases {
-		got := sort.SearchFloat64s(ticks, tc.input)
+		got := sort.SearchFloat64s(rangePoints, tc.input)
 		if got != tc.want {
 			t.Errorf("result mismatch, input=%f, got=%d, want=%d", tc.input, got, tc.want)
 		}
@@ -29,7 +30,7 @@ func TestSearchFloat64s(t *testing.T) {
 }
 
 func TestSortSearch(t *testing.T) {
-	ticks := []float64{0, 1, 2, 3, 4}
+	rangePoints := []float64{0, 1, 2, 3, 4}
 	testCases := []struct {
 		input float64
 		want  int
@@ -43,22 +44,87 @@ func TestSortSearch(t *testing.T) {
 		{input: 4.1, want: 5},
 	}
 	for _, tc := range testCases {
-		got := sort.Search(len(ticks), func(i int) bool { return ticks[i] > tc.input })
+		got := sort.Search(len(rangePoints), func(i int) bool { return rangePoints[i] > tc.input })
 		if got != tc.want {
 			t.Errorf("result mismatch, input=%f, got=%d, want=%d", tc.input, got, tc.want)
 		}
 	}
 }
 
-func TestHistogram(t *testing.T) {
-	buckets := NewBuckets[float64](10, 0, 10)
-	for i := 0; i < 10; i++ {
-		for j := 0; j < i*2; j++ {
-			buckets.AddValue(float64(i) + 0.5)
+func TestHistogram_AddValue(t *testing.T) {
+	testCases := []struct {
+		inputs []float64
+		want   []int
+	}{
+		{inputs: []float64{0}, want: []int{1, 0, 0, 0, 0}},
+		{inputs: []float64{0.5}, want: []int{1, 0, 0, 0, 0}},
+		{inputs: []float64{0.99}, want: []int{1, 0, 0, 0, 0}},
+		{inputs: []float64{1}, want: []int{0, 1, 0, 0, 0}},
+		{inputs: []float64{0, 1, 1}, want: []int{1, 2, 0, 0, 0}},
+		{inputs: []float64{4.9999}, want: []int{0, 0, 0, 0, 1}},
+		{inputs: []float64{5}, want: []int{0, 0, 0, 0, 0}},
+	}
+	for _, tc := range testCases {
+		h := NewHistogram[float64](5, 0, 5)
+		for _, v := range tc.inputs {
+			h.AddValue(v)
+		}
+		if got, want := h.RangePoints(), []float64{0, 1, 2, 3, 4, 5}; !slices.Equal(got, want) {
+			t.Errorf("ticks mismatch, testCase=%+v, got=%v, want=%v", tc, got, want)
+		}
+		if got, want := h.Counts(), tc.want; !slices.Equal(got, want) {
+			t.Errorf("counts mismatch, testCase=%+v, got=%v, want=%v", tc, got, want)
+		}
+		if got, want := h, (&Histogram[float64]{rangePoints: []float64{0, 1, 2, 3, 4, 5}, counts: tc.want}); !got.Equal(want) {
+			t.Errorf("counts mismatch, testCase=%+v, got=%v, want=%v", tc, got, want)
 		}
 	}
+}
 
-	histogram := NewHistogram(buckets, defaultBarChar, 40)
-	got := histogram.String()
-	log.Printf("\n%s", got)
+func TestHistogramFormatter(t *testing.T) {
+	t.Run("case1", func(t *testing.T) {
+		histogram := NewHistogram[float64](10, 0, 10)
+		for i := 0; i < 10; i++ {
+			for j := 0; j < i*2; j++ {
+				histogram.AddValue(float64(i))
+			}
+		}
+
+		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40)
+		got := formatter.String()
+		want := ` 0.00 ~  1.00 [  0 ] 
+ 1.00 ~  2.00 [  2 ] **
+ 2.00 ~  3.00 [  4 ] ****
+ 3.00 ~  4.00 [  6 ] ******
+ 4.00 ~  5.00 [  8 ] ********
+ 5.00 ~  6.00 [ 10 ] **********
+ 6.00 ~  7.00 [ 12 ] ************
+ 7.00 ~  8.00 [ 14 ] **************
+ 8.00 ~  9.00 [ 16 ] ****************
+ 9.00 ~ 10.00 [ 18 ] *******************
+`
+		if got != want {
+			t.Errorf("result mismatch,\n got=%q,\nwant=%q", got, want)
+		}
+	})
+	t.Run("allZero", func(t *testing.T) {
+		histogram := NewHistogram[float64](10, 0, 10)
+
+		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40)
+		got := formatter.String()
+		want := ` 0.00 ~  1.00 [ 0 ] 
+ 1.00 ~  2.00 [ 0 ] 
+ 2.00 ~  3.00 [ 0 ] 
+ 3.00 ~  4.00 [ 0 ] 
+ 4.00 ~  5.00 [ 0 ] 
+ 5.00 ~  6.00 [ 0 ] 
+ 6.00 ~  7.00 [ 0 ] 
+ 7.00 ~  8.00 [ 0 ] 
+ 8.00 ~  9.00 [ 0 ] 
+ 9.00 ~ 10.00 [ 0 ] 
+`
+		if got != want {
+			t.Errorf("result mismatch,\n got=%q,\nwant=%q", got, want)
+		}
+	})
 }
