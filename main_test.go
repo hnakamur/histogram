@@ -138,6 +138,8 @@ func TestAdjustMax(t *testing.T) {
 	}{
 		{input: 0, want: 0},
 		{input: 1, want: 1},
+		{input: 1.41, want: 1.5},
+		{input: 1.5, want: 1.5},
 		{input: 0.21, want: 0.22},
 		{input: 0.22, want: 0.22},
 		{input: 0.23, want: 0.24},
