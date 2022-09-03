@@ -65,7 +65,7 @@ func TestHistogram_AddValue(t *testing.T) {
 		{inputs: []float64{5}, want: []int{0, 0, 0, 0, 0}},
 	}
 	for _, tc := range testCases {
-		h := NewHistogram[float64](BuildRangePoints[float64](5, 0, 5))
+		h := NewHistogram(BuildRangePoints[float64](5, 0, 5))
 		for _, v := range tc.inputs {
 			h.AddValue(v)
 		}
