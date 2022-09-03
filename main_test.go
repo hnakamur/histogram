@@ -128,3 +128,31 @@ func TestHistogramFormatter(t *testing.T) {
 		}
 	})
 }
+
+func TestAdjustMax(t *testing.T) {
+	testCases := []struct {
+		input float64
+		want  float64
+	}{
+		{input: 0, want: 0},
+		{input: 1, want: 1},
+		{input: 0.21, want: 0.22},
+		{input: 0.22, want: 0.22},
+		{input: 0.23, want: 0.24},
+		{input: 0.25, want: 0.25},
+		{input: 0.26, want: 0.26},
+		{input: 0.27, want: 0.28},
+		{input: 0.28, want: 0.28},
+		{input: 0.29, want: 0.30},
+		{input: 0.30, want: 0.30},
+		{input: 0.235, want: 0.24},
+		{input: 0.99, want: 1.0},
+		{input: 9.9, want: 10},
+	}
+	for _, tc := range testCases {
+		got := adjustMax(tc.input)
+		if got != tc.want {
+			t.Errorf("result mismatch, input=%g, got=%g, want=%g", tc.input, got, tc.want)
+		}
+	}
+}

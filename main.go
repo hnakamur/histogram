@@ -59,10 +59,11 @@ func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth i
 	}
 
 	min := Min(minList...)
-	max := Min(maxList...)
+	max := Max(maxList...)
 	if !fixedAxis {
 		axisMin = Min(axisMin, min)
 		axisMax = Max(axisMax, max)
+		axisMax = adjustMax(axisMax)
 	}
 
 	rangePoints := BuildRangePoints(bucketCount, axisMin, axisMax)
@@ -387,4 +388,45 @@ func Max[T constraints.Ordered](values ...T) T {
 		}
 	}
 	return max
+}
+
+func adjustMax(max float64) float64 {
+	if max < 0 {
+		panic("negative max")
+	}
+
+	s := fmt.Sprintf("%.1e", max)
+	// s is like 4.6e+01
+	d1 := mustAtoi(s[0:1])
+	d2 := mustAtoi(s[2:3])
+	exp := mustAtoi(s[4:])
+	switch d2 {
+	case 1:
+		d2 = 2
+	case 3:
+		d2 = 4
+	case 7:
+		d2 = 8
+	case 9:
+		d1++
+		d2 = 0
+	}
+	s2 := fmt.Sprintf("%d.%de%d", d1, d2, exp)
+	return mustParseFloat(s2, float64BitSize)
+}
+
+func mustAtoi(s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		panic("expected integer string")
+	}
+	return i
+}
+
+func mustParseFloat(s string, bitSize int) float64 {
+	f, err := strconv.ParseFloat(s, bitSize)
+	if err != nil {
+		panic("failed to parse float value")
+	}
+	return f
 }
