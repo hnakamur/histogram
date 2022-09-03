@@ -63,7 +63,7 @@ func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth i
 	if !fixedAxis {
 		axisMin = Min(axisMin, min)
 		axisMax = Max(axisMax, max)
-		axisMax = adjustMax(axisMax)
+		axisMax = ceilSecondSignificantDigitToMultiplesOfTwoOrFive(axisMax)
 	}
 
 	rangePoints := BuildRangePoints(bucketCount, axisMin, axisMax)
@@ -417,7 +417,7 @@ func Max[T constraints.Ordered](values ...T) T {
 	return max
 }
 
-func adjustMax(max float64) float64 {
+func ceilSecondSignificantDigitToMultiplesOfTwoOrFive(max float64) float64 {
 	if max < 0 {
 		panic("negative max")
 	}

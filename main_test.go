@@ -131,7 +131,7 @@ func TestHistogramFormatter(t *testing.T) {
 	})
 }
 
-func TestAdjustMax(t *testing.T) {
+func TestCeilSecondSignificantDigitToMultiplesOfTwoOrFive(t *testing.T) {
 	testCases := []struct {
 		input float64
 		want  float64
@@ -157,7 +157,7 @@ func TestAdjustMax(t *testing.T) {
 		{input: 9.9, want: 10},
 	}
 	for _, tc := range testCases {
-		got := adjustMax(tc.input)
+		got := ceilSecondSignificantDigitToMultiplesOfTwoOrFive(tc.input)
 		if got != tc.want {
 			t.Errorf("result mismatch, input=%g, got=%g, want=%g", tc.input, got, tc.want)
 		}
@@ -169,7 +169,7 @@ func TestAdjustMaxProperty(t *testing.T) {
 	const n = 100000
 	for i := 0; i < n; i++ {
 		v := rnd.Float64()
-		v2 := adjustMax(v)
+		v2 := ceilSecondSignificantDigitToMultiplesOfTwoOrFive(v)
 		if v2 < v {
 			t.Errorf("adjustMax output must not be smaller than input, input=%g, output=%g", v, v2)
 		}
@@ -180,6 +180,6 @@ func BenchmarkAdjustMax(b *testing.B) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < b.N; i++ {
 		v := rnd.Float64()
-		_ = adjustMax(v)
+		_ = ceilSecondSignificantDigitToMultiplesOfTwoOrFive(v)
 	}
 }
