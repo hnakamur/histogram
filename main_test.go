@@ -173,3 +173,11 @@ func TestAdjustMaxProperty(t *testing.T) {
 		}
 	}
 }
+
+func BenchmarkAdjustMax(b *testing.B) {
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < b.N; i++ {
+		v := rnd.Float64()
+		_ = adjustMax(v)
+	}
+}
