@@ -13,21 +13,23 @@ import (
 	"strings"
 
 	"golang.org/x/exp/constraints"
+	"golang.org/x/exp/slices"
 )
 
 func main() {
 	bucketCount := flag.Int("bucket-count", 10, "histogram bucket count")
 	axisMin := flag.Float64("axis-min", 0, "axis minimum value")
 	axisMax := flag.Float64("axis-max", 10, "axis maximum value")
-	fixedAxis := flag.Bool("fixed-axis", true, "if enabled, axis min and max are fixed even if some of values are out of range")
+	fixedAxis := flag.Bool("fixed-axis", false, "if enabled, axis min and max are fixed even if some of values are out of range")
+	graphWidth := flag.Int("graph-width", 60, "graph column width including labels")
 	flag.Parse()
 
-	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis); err != nil {
+	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis, *graphWidth); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool) error {
+func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth int) error {
 	values, err := readFloatValues(os.Stdin)
 	if err != nil {
 		return err
@@ -43,23 +45,24 @@ func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool) error {
 		axisMax = Max(axisMax, max)
 	}
 
-	log.Printf("min=%f, max=%f, axisMin=%f, axisMax=%f", min, max, axisMin, axisMax)
-	ticks := buildAxisTicks(bucketCount, axisMin, axisMax)
-	log.Printf("ticks=%v", ticks)
-
+	buckets := NewBuckets(bucketCount, axisMin, axisMax)
 	for _, v := range values {
-		i := sort.SearchFloat64s(ticks, v)
-		log.Printf("v=%f, i=%d", v, i)
+		buckets.AddValue(v)
 	}
+
+	histogram := NewHistogram(buckets, defaultBarChar, graphWidth)
+	fmt.Print(histogram)
 
 	return nil
 }
+
+const float64BitSize = 64
 
 func readFloatValues(r io.Reader) ([]float64, error) {
 	var values []float64
 	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
-		value, err := strconv.ParseFloat(scanner.Text(), 64)
+		value, err := strconv.ParseFloat(scanner.Text(), float64BitSize)
 		if err != nil {
 			return nil, err
 		}
@@ -71,31 +74,77 @@ func readFloatValues(r io.Reader) ([]float64, error) {
 	return values, nil
 }
 
-type Number interface {
-	constraints.Integer | constraints.Float
-}
-
 const defaultBarChar = "*"
+const barMinWidth = 10
 
-type Histogram[T Number] struct {
-	buckets    *Buckets[T]
+type Histogram struct {
+	buckets    *Buckets[float64]
 	barChar    string
 	graphWidth int
 }
 
-func NewHistogram[T Number](buckets *Buckets[T], barChar string, graphWidth int) *Histogram[T] {
-	return &Histogram[T]{buckets: buckets, barChar: barChar, graphWidth: graphWidth}
+func NewHistogram(buckets *Buckets[float64], barChar string, graphWidth int) *Histogram {
+	if len(barChar) == 0 {
+		panic("barChar must not be empty")
+	}
+	if graphWidth == 0 {
+		panic("graphWidth too small")
+	}
+	return &Histogram{buckets: buckets, barChar: barChar, graphWidth: graphWidth}
 }
 
-func (h *Histogram[T]) String() string {
+func (h *Histogram) String() string {
 	var b strings.Builder
-	// const valueWidth = 6
-	// barMaxWidth := h.graphWidth - valueWidth - 2
-	for i, start := range h.buckets.ticks {
+
+	n := len(h.buckets.ticks) - 1
+
+	tickWidth := 0
+	tickStrs := make([]string, n+1)
+	for i := 0; i <= n; i++ {
+		s := fmt.Sprintf("%.2f", h.buckets.ticks[i])
+		tickStrs[i] = s
+		tickWidth = Max(tickWidth, len(s))
+	}
+
+	maxCount := 0
+	countWidth := 0
+	countStrs := make([]string, n)
+	for i := 0; i < n; i++ {
 		count := h.buckets.counts[i]
-		_, _ = fmt.Fprintf(&b, "%6.2f: %s\n", start, strings.Repeat(h.barChar, count))
+		s := strconv.Itoa(count)
+		countStrs[i] = s
+		countWidth = Max(countWidth, len(s))
+		maxCount = Max(maxCount, count)
+	}
+
+	barMaxWidth := h.graphWidth - (tickWidth + len(" ~ ") + tickWidth + len(" [ ") + countWidth + len(" ] "))
+	if barMaxWidth <= barMinWidth {
+		log.Fatalf("bar max width becomes too small, retry with larger graphWidth, barMaxWidth=%d, graphWidth=%d", barMaxWidth, h.graphWidth)
+	}
+
+	barRatio := float64(0)
+	if maxCount != 0 {
+		barRatio = float64(barMaxWidth) / (float64(maxCount) * float64(len(h.barChar)))
+	}
+
+	barWidths := make([]int, n)
+	for i := 0; i < n; i++ {
+		count := h.buckets.counts[i]
+		barWidths[i] = int(float64(count) * barRatio)
+	}
+
+	for i := 0; i < n; i++ {
+		_, _ = fmt.Fprintf(&b, "%*s ~ %*s [ %*s ] %s\n",
+			tickWidth, tickStrs[i],
+			tickWidth, tickStrs[i+1],
+			countWidth, countStrs[i],
+			strings.Repeat(h.barChar, barWidths[i]))
 	}
 	return b.String()
+}
+
+type Number interface {
+	constraints.Integer | constraints.Float
 }
 
 type Buckets[T Number] struct {
@@ -105,7 +154,7 @@ type Buckets[T Number] struct {
 
 func NewBuckets[T Number](count int, min, max T) *Buckets[T] {
 	ticks := buildAxisTicks(count, min, max)
-	counts := make([]int, len(ticks))
+	counts := make([]int, len(ticks)-1)
 	return &Buckets[T]{ticks: ticks, counts: counts}
 }
 
@@ -118,16 +167,14 @@ func buildAxisTicks[T Number](count int, min, max T) []T {
 }
 
 func (b *Buckets[T]) AddValue(v T) {
-	i := sort.Search(len(b.ticks), func(i int) bool { return b.ticks[i] > v })
-	if v != b.ticks[i] {
-		i--
+	i := sort.Search(len(b.ticks), func(i int) bool { return b.ticks[i] > v }) - 1
+	if i < len(b.counts) {
+		b.counts[i]++
 	}
-	b.counts[i]++
 }
 
-type Range[T constraints.Ordered] struct {
-	Start T // inclusive
-	End   T // exclusive
+func (b *Buckets[T]) Equal(o *Buckets[T]) bool {
+	return slices.Equal(b.ticks, o.ticks) && slices.Equal(b.counts, o.counts)
 }
 
 func MinMaxInSlice[T constraints.Ordered](values []T) (min T, max T) {
