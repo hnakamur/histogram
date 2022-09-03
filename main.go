@@ -155,28 +155,55 @@ func (f *MultipleHistogramFormatter) String() string {
 }
 
 func (f *MultipleHistogramFormatter) LineStrings(graphWidth int, barChar string, padEnd bool) []string {
-	if len(f.histograms) == 1 {
+	n := len(f.histograms)
+	if n == 1 {
 		formatter := NewHistogramFormatter(f.histograms[0], f.barChar, f.graphWidth, f.fracPrec)
 		return formatter.LineStrings(graphWidth, barChar, padEnd)
 	}
 
-	var ranges []string
-	var countAndBarMaxWidth int
-	countAndBarsList := make([][]string, len(f.histograms))
+	maxCounts := make([]int, n)
 	for i, h := range f.histograms {
-		f2 := NewHistogramFormatter(h, f.barChar, f.graphWidth, f.fracPrec)
-		if i == 0 {
-			ranges = f2.RangeStrings()
-			rangeWidth := len(ranges[0])
-			graphJointWidthTotal := len(f.histograms) - 1
-			countAndBarMaxWidth = (f.graphWidth - (rangeWidth + graphJointWidthTotal)) / len(f.histograms)
-		}
+		maxCounts[i] = h.MaxCount()
+	}
+	maxCountMax := Max(maxCounts...)
 
+	formatters := make([]*HistogramFormatter, n)
+	for i, h := range f.histograms {
+		formatters[i] = NewHistogramFormatter(h, f.barChar, f.graphWidth, f.fracPrec)
+	}
+
+	ranges := formatters[0].RangeStrings()
+	rangeWidth := len(ranges[0])
+
+	countStrsList := make([][]string, n)
+	for i, f2 := range formatters {
+		countStrsList[i] = f2.CountStrings()
+	}
+
+	countWidthsTotal := 0
+	countWidths := make([]int, n)
+	for i, countStrs := range countStrsList {
+		countWidths[i] = len(countStrs[0])
+		countWidthsTotal += countWidths[i]
+	}
+
+	jointWidthsTotal := n - 1
+	barWidthsTotal := f.graphWidth - (rangeWidth + countWidthsTotal + (len(" [ ")+len(" ] "))*n + jointWidthsTotal)
+	barMaxWidth := barWidthsTotal / n
+
+	barWidthRatio := float64(0)
+	if maxCountMax != 0 {
+		barWidthRatio = float64(barMaxWidth) / (float64(maxCountMax) * float64(len(barChar)))
+	}
+
+	countAndBarsList := make([][]string, n)
+	for i, f2 := range formatters {
+		countAndBarMaxWidth := countWidths[i] + barMaxWidth
 		padEnd2 := true
 		if i == len(f.histograms)-1 {
 			padEnd2 = padEnd
 		}
-		countAndBarsList[i] = f2.CountAndBarStrings(countAndBarMaxWidth, f.barChar, padEnd2)
+		countAndBarsList[i] = f2.CountAndBarStrings(countAndBarMaxWidth, barWidthRatio, f.barChar, padEnd2)
 	}
 
 	lines := make([]string, len(ranges))
@@ -250,11 +277,11 @@ func padStartSpace(targetWidth int, s string) string {
 	return fmt.Sprintf("%*s", targetWidth, s)
 }
 
-func (f *HistogramFormatter) CountAndBarStrings(countAndBarMaxWidth int, barChar string, padEnd bool) []string {
+func (f *HistogramFormatter) CountAndBarStrings(countAndBarMaxWidth int, barWidthRatio float64, barChar string, padEnd bool) []string {
 	counts := f.CountStrings()
 	countWidth := len(counts[0])
 	barMaxWidth := countAndBarMaxWidth - (len(" [ ") + countWidth + len(" ] "))
-	bars := f.BarStrings(barMaxWidth, barChar, padEnd)
+	bars := f.BarStrings(barMaxWidth, barWidthRatio, barChar, padEnd)
 
 	countAndBars := make([]string, len(counts))
 	for i := range countAndBars {
@@ -263,20 +290,14 @@ func (f *HistogramFormatter) CountAndBarStrings(countAndBarMaxWidth int, barChar
 	return countAndBars
 }
 
-func (f *HistogramFormatter) BarStrings(barMaxWidth int, barChar string, padEnd bool) []string {
+func (f *HistogramFormatter) BarStrings(barMaxWidth int, barWidthRatio float64, barChar string, padEnd bool) []string {
 	if barMaxWidth <= barMinWidth {
 		log.Fatalf("bar max width becomes too small, retry with larger graphWidth, barMaxWidth=%d, graphWidth=%d", barMaxWidth, f.graphWidth)
 	}
 
-	maxCount := f.histogram.MaxCount()
-	barRatio := float64(0)
-	if maxCount != 0 {
-		barRatio = float64(barMaxWidth) / (float64(maxCount) * float64(len(barChar)))
-	}
-
 	bars := make([]string, len(f.histogram.counts))
 	for i, count := range f.histogram.counts {
-		barWidth := int(float64(count) * barRatio)
+		barWidth := int(float64(count) * barWidthRatio)
 		if padEnd {
 			bars[i] = strings.Repeat(f.barChar, barWidth) + strings.Repeat(" ", barMaxWidth-barWidth)
 		} else {
@@ -293,7 +314,14 @@ func (f *HistogramFormatter) LineStrings(graphWidth int, barChar string, padEnd 
 	rangeWidth := len(ranges[0])
 	countWidth := len(counts[0])
 	barMaxWidth := graphWidth - (rangeWidth + len(" [ ") + countWidth + len(" ] "))
-	bars := f.BarStrings(barMaxWidth, barChar, padEnd)
+
+	maxCount := f.histogram.MaxCount()
+	barWidthRatio := float64(0)
+	if maxCount != 0 {
+		barWidthRatio = float64(barMaxWidth) / (float64(maxCount) * float64(len(barChar)))
+	}
+
+	bars := f.BarStrings(barMaxWidth, barWidthRatio, barChar, padEnd)
 
 	lines := make([]string, len(ranges))
 	for i := range lines {
