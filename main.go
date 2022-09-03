@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -22,40 +21,78 @@ func main() {
 	axisMax := flag.Float64("axis-max", 10, "axis maximum value")
 	fracPrec := flag.Uint("frac-prec", 2, "number fraction precision width")
 	fixedAxis := flag.Bool("fixed-axis", false, "if enabled, axis min and max are fixed even if some of values are out of range")
-	graphWidth := flag.Int("graph-width", 60, "graph column width including labels")
+	graphWidth := flag.Int("graph-width", 80, "graph column width including labels")
 	flag.Parse()
 
-	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis, *graphWidth, *fracPrec); err != nil {
+	nArg := flag.NArg()
+	if nArg != 1 && nArg != 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s file1\n\nYou can use - for stdin.\n", os.Args[0])
+		os.Exit(2)
+	}
+
+	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis, *graphWidth, *fracPrec, flag.Args()); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth int, fracPrec uint) error {
-	values, err := readFloat64Values(os.Stdin)
-	if err != nil {
-		return err
+func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth int, fracPrec uint, filenames []string) error {
+	fileCount := len(filenames)
+	minList := make([]float64, fileCount)
+	maxList := make([]float64, fileCount)
+	valuesList := make([][]float64, fileCount)
+	for i, filename := range filenames {
+		values, err := readFloat64ValuesFile(filenames[i])
+		if err != nil {
+			return err
+		}
+
+		if len(values) == 0 {
+			if filename == stdinFilename {
+				filename = "stdin"
+			}
+			return fmt.Errorf("no value in %s", filename)
+		}
+
+		valuesList[i] = values
+		minList[i] = Min(values...)
+		maxList[i] = Max(values...)
 	}
 
-	if len(values) == 0 {
-		return errors.New("no value from stdin")
-	}
-
-	min := Min(values...)
-	max := Max(values...)
+	min := Min(minList...)
+	max := Min(maxList...)
 	if !fixedAxis {
 		axisMin = Min(axisMin, min)
 		axisMax = Max(axisMax, max)
 	}
 
-	histogram := NewHistogram(bucketCount, axisMin, axisMax)
-	for _, v := range values {
-		histogram.AddValue(v)
+	rangePoints := BuildRangePoints(bucketCount, axisMin, axisMax)
+	histograms := make([]*Histogram[float64], fileCount)
+	for i, values := range valuesList {
+		histogram := NewHistogram(rangePoints)
+		histogram.AddValues(values)
+		histograms[i] = histogram
 	}
 
-	formatter := NewHistogramFormatter(histogram, defaultBarChar, graphWidth, fracPrec)
+	formatter := NewMultipleHistogramFormatter(histograms, defaultBarChar, graphWidth, fracPrec)
 	fmt.Print(formatter)
 
 	return nil
+}
+
+const stdinFilename = "-"
+
+func readFloat64ValuesFile(filename string) ([]float64, error) {
+	if filename == stdinFilename {
+		return readFloat64Values(os.Stdin)
+	}
+
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	return readFloat64Values(file)
 }
 
 const float64BitSize = 64
@@ -79,6 +116,80 @@ func readFloat64Values(r io.Reader) ([]float64, error) {
 const defaultBarChar = "*"
 const barMinWidth = 10
 
+type MultipleHistogramFormatter struct {
+	histograms []*Histogram[float64]
+	fracPrec   uint
+	barChar    string
+	graphWidth int
+}
+
+func NewMultipleHistogramFormatter(histograms []*Histogram[float64], barChar string, graphWidth int, fracPrec uint) *MultipleHistogramFormatter {
+	if len(histograms) == 0 {
+		panic("histograms must not be empty")
+	}
+	if len(barChar) == 0 {
+		panic("barChar must not be empty")
+	}
+	if graphWidth == 0 {
+		panic("graphWidth too small")
+	}
+
+	for i := 1; i < len(histograms); i++ {
+		if !slices.Equal(histograms[i].rangePoints, histograms[0].rangePoints) {
+			panic("all histograms rangePoints must be same")
+		}
+	}
+
+	return &MultipleHistogramFormatter{
+		histograms: histograms,
+		barChar:    barChar,
+		graphWidth: graphWidth,
+		fracPrec:   fracPrec,
+	}
+}
+
+func (f *MultipleHistogramFormatter) String() string {
+	lines := f.LineStrings(f.graphWidth, f.barChar, false)
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func (f *MultipleHistogramFormatter) LineStrings(graphWidth int, barChar string, padEnd bool) []string {
+	if len(f.histograms) == 1 {
+		formatter := NewHistogramFormatter(f.histograms[0], f.barChar, f.graphWidth, f.fracPrec)
+		return formatter.LineStrings(graphWidth, barChar, padEnd)
+	}
+
+	var ranges []string
+	var countAndBarMaxWidth int
+	countAndBarsList := make([][]string, len(f.histograms))
+	for i, h := range f.histograms {
+		f2 := NewHistogramFormatter(h, f.barChar, f.graphWidth, f.fracPrec)
+		if i == 0 {
+			ranges = f2.RangeStrings()
+			rangeWidth := len(ranges[0])
+			graphJointWidthTotal := len(f.histograms) - 1
+			countAndBarMaxWidth = (f.graphWidth - (rangeWidth + graphJointWidthTotal)) / len(f.histograms)
+		}
+
+		padEnd2 := true
+		if i == len(f.histograms)-1 {
+			padEnd2 = padEnd
+		}
+		countAndBarsList[i] = f2.CountAndBarStrings(countAndBarMaxWidth, f.barChar, padEnd2)
+	}
+
+	lines := make([]string, len(ranges))
+	fields := make([]string, 1+len(f.histograms))
+	for i := range ranges {
+		fields[0] = ranges[i]
+		for j := range f.histograms {
+			fields[1+j] = countAndBarsList[j][i]
+		}
+		lines[i] = strings.Join(fields, " ")
+	}
+	return lines
+}
+
 type HistogramFormatter struct {
 	histogram  *Histogram[float64]
 	fracPrec   uint
@@ -101,11 +212,11 @@ func NewHistogramFormatter(histogram *Histogram[float64], barChar string, graphW
 	}
 }
 
-func (h *HistogramFormatter) RangeStrings() []string {
+func (f *HistogramFormatter) RangeStrings() []string {
 	tickWidth := 0
-	ticks := make([]string, len(h.histogram.rangePoints))
-	for i, tick := range h.histogram.rangePoints {
-		s := fmt.Sprintf("%.*f", h.fracPrec, tick)
+	ticks := make([]string, len(f.histogram.rangePoints))
+	for i, tick := range f.histogram.rangePoints {
+		s := fmt.Sprintf("%.*f", f.fracPrec, tick)
 		ticks[i] = s
 		tickWidth = Max(tickWidth, len(s))
 	}
@@ -119,10 +230,10 @@ func (h *HistogramFormatter) RangeStrings() []string {
 	return ranges
 }
 
-func (h *HistogramFormatter) CountStrings() []string {
+func (f *HistogramFormatter) CountStrings() []string {
 	countWidth := 0
-	countStrs := make([]string, len(h.histogram.counts))
-	for i, count := range h.histogram.counts {
+	countStrs := make([]string, len(f.histogram.counts))
+	for i, count := range f.histogram.counts {
 		s := strconv.Itoa(count)
 		countStrs[i] = s
 		countWidth = Max(countWidth, len(s))
@@ -138,37 +249,50 @@ func padStartSpace(targetWidth int, s string) string {
 	return fmt.Sprintf("%*s", targetWidth, s)
 }
 
-func (h *HistogramFormatter) BarStrings(barMaxWidth int, barChar string, padEnd bool) []string {
+func (f *HistogramFormatter) CountAndBarStrings(countAndBarMaxWidth int, barChar string, padEnd bool) []string {
+	counts := f.CountStrings()
+	countWidth := len(counts[0])
+	barMaxWidth := countAndBarMaxWidth - (len(" [ ") + countWidth + len(" ] "))
+	bars := f.BarStrings(barMaxWidth, barChar, padEnd)
+
+	countAndBars := make([]string, len(counts))
+	for i := range countAndBars {
+		countAndBars[i] = fmt.Sprintf("[ %s ] %s", counts[i], bars[i])
+	}
+	return countAndBars
+}
+
+func (f *HistogramFormatter) BarStrings(barMaxWidth int, barChar string, padEnd bool) []string {
 	if barMaxWidth <= barMinWidth {
-		log.Fatalf("bar max width becomes too small, retry with larger graphWidth, barMaxWidth=%d, graphWidth=%d", barMaxWidth, h.graphWidth)
+		log.Fatalf("bar max width becomes too small, retry with larger graphWidth, barMaxWidth=%d, graphWidth=%d", barMaxWidth, f.graphWidth)
 	}
 
-	maxCount := h.histogram.MaxCount()
+	maxCount := f.histogram.MaxCount()
 	barRatio := float64(0)
 	if maxCount != 0 {
 		barRatio = float64(barMaxWidth) / (float64(maxCount) * float64(len(barChar)))
 	}
 
-	bars := make([]string, len(h.histogram.counts))
-	for i, count := range h.histogram.counts {
+	bars := make([]string, len(f.histogram.counts))
+	for i, count := range f.histogram.counts {
 		barWidth := int(float64(count) * barRatio)
 		if padEnd {
-			bars[i] = strings.Repeat(h.barChar, barWidth) + strings.Repeat(" ", barMaxWidth-barWidth)
+			bars[i] = strings.Repeat(f.barChar, barWidth) + strings.Repeat(" ", barMaxWidth-barWidth)
 		} else {
-			bars[i] = strings.Repeat(h.barChar, barWidth)
+			bars[i] = strings.Repeat(f.barChar, barWidth)
 		}
 	}
 	return bars
 }
 
-func (h *HistogramFormatter) LineStrings(graphWidth int, barChar string, padEnd bool) []string {
-	ranges := h.RangeStrings()
-	counts := h.CountStrings()
+func (f *HistogramFormatter) LineStrings(graphWidth int, barChar string, padEnd bool) []string {
+	ranges := f.RangeStrings()
+	counts := f.CountStrings()
 
 	rangeWidth := len(ranges[0])
 	countWidth := len(counts[0])
 	barMaxWidth := graphWidth - (rangeWidth + len(" [ ") + countWidth + len(" ] "))
-	bars := h.BarStrings(barMaxWidth, barChar, padEnd)
+	bars := f.BarStrings(barMaxWidth, barChar, padEnd)
 
 	lines := make([]string, len(ranges))
 	for i := range lines {
@@ -177,8 +301,8 @@ func (h *HistogramFormatter) LineStrings(graphWidth int, barChar string, padEnd 
 	return lines
 }
 
-func (h *HistogramFormatter) String() string {
-	lines := h.LineStrings(h.graphWidth, h.barChar, false)
+func (f *HistogramFormatter) String() string {
+	lines := f.LineStrings(f.graphWidth, f.barChar, false)
 	return strings.Join(lines, "\n") + "\n"
 }
 
@@ -191,13 +315,12 @@ type Histogram[T Number] struct {
 	counts      []int
 }
 
-func NewHistogram[T Number](count int, min, max T) *Histogram[T] {
-	rangePoints := buildRangePoints(count, min, max)
+func NewHistogram[T Number](rangePoints []T) *Histogram[T] {
 	counts := make([]int, len(rangePoints)-1)
 	return &Histogram[T]{rangePoints: rangePoints, counts: counts}
 }
 
-func buildRangePoints[T Number](count int, min, max T) []T {
+func BuildRangePoints[T Number](count int, min, max T) []T {
 	rangePoints := make([]T, count+1)
 	for i := 0; i <= count; i++ {
 		rangePoints[i] = min + (max-min)*T(i)/T(count)

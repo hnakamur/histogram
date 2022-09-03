@@ -65,7 +65,7 @@ func TestHistogram_AddValue(t *testing.T) {
 		{inputs: []float64{5}, want: []int{0, 0, 0, 0, 0}},
 	}
 	for _, tc := range testCases {
-		h := NewHistogram[float64](5, 0, 5)
+		h := NewHistogram[float64](BuildRangePoints[float64](5, 0, 5))
 		for _, v := range tc.inputs {
 			h.AddValue(v)
 		}
@@ -83,7 +83,7 @@ func TestHistogram_AddValue(t *testing.T) {
 
 func TestHistogramFormatter(t *testing.T) {
 	t.Run("case1", func(t *testing.T) {
-		histogram := NewHistogram[float64](10, 0, 10)
+		histogram := NewHistogram(BuildRangePoints[float64](10, 0, 10))
 		for i := 0; i < 10; i++ {
 			for j := 0; j < i*2; j++ {
 				histogram.AddValue(float64(i))
@@ -108,9 +108,9 @@ func TestHistogramFormatter(t *testing.T) {
 		}
 	})
 	t.Run("allZero", func(t *testing.T) {
-		histogram := NewHistogram[float64](10, 0, 10)
+		histogram := NewHistogram(BuildRangePoints[float64](10, 0, 10))
 
-		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40)
+		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, 2)
 		got := formatter.String()
 		want := ` 0.00 ~  1.00 [ 0 ] 
  1.00 ~  2.00 [ 0 ] 
