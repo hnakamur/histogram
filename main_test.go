@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"math/rand"
 	"sort"
 	"testing"
@@ -94,19 +95,20 @@ func TestHistogramFormatter(t *testing.T) {
 
 		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, 2)
 		got := formatter.String()
-		want := ` 0.00 ~  1.00 [  0 ] 
- 1.00 ~  2.00 [  2 ] **
- 2.00 ~  3.00 [  4 ] ****
- 3.00 ~  4.00 [  6 ] ******
- 4.00 ~  5.00 [  8 ] ********
- 5.00 ~  6.00 [ 10 ] **********
- 6.00 ~  7.00 [ 12 ] ************
- 7.00 ~  8.00 [ 14 ] **************
- 8.00 ~  9.00 [ 16 ] ****************
- 9.00 ~ 10.00 [ 18 ] *******************
+		want := ` 0.00 ~  1.00   0 |
+ 1.00 ~  2.00   2 |**
+ 2.00 ~  3.00   4 |****
+ 3.00 ~  4.00   6 |*******
+ 4.00 ~  5.00   8 |*********
+ 5.00 ~  6.00  10 |***********
+ 6.00 ~  7.00  12 |**************
+ 7.00 ~  8.00  14 |****************
+ 8.00 ~  9.00  16 |******************
+ 9.00 ~ 10.00  18 |*********************
 `
 		if got != want {
 			t.Errorf("result mismatch,\n got=%q,\nwant=%q", got, want)
+			fmt.Printf("\n%s", got)
 		}
 	})
 	t.Run("allZero", func(t *testing.T) {
@@ -114,19 +116,20 @@ func TestHistogramFormatter(t *testing.T) {
 
 		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, 2)
 		got := formatter.String()
-		want := ` 0.00 ~  1.00 [ 0 ] 
- 1.00 ~  2.00 [ 0 ] 
- 2.00 ~  3.00 [ 0 ] 
- 3.00 ~  4.00 [ 0 ] 
- 4.00 ~  5.00 [ 0 ] 
- 5.00 ~  6.00 [ 0 ] 
- 6.00 ~  7.00 [ 0 ] 
- 7.00 ~  8.00 [ 0 ] 
- 8.00 ~  9.00 [ 0 ] 
- 9.00 ~ 10.00 [ 0 ] 
+		want := ` 0.00 ~  1.00  0 |
+ 1.00 ~  2.00  0 |
+ 2.00 ~  3.00  0 |
+ 3.00 ~  4.00  0 |
+ 4.00 ~  5.00  0 |
+ 5.00 ~  6.00  0 |
+ 6.00 ~  7.00  0 |
+ 7.00 ~  8.00  0 |
+ 8.00 ~  9.00  0 |
+ 9.00 ~ 10.00  0 |
 `
 		if got != want {
 			t.Errorf("result mismatch,\n got=%q,\nwant=%q", got, want)
+			fmt.Printf("\n%s", got)
 		}
 	})
 }
