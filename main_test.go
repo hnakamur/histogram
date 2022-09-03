@@ -1,8 +1,10 @@
 package main
 
 import (
+	"math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"golang.org/x/exp/slices"
 )
@@ -146,6 +148,9 @@ func TestAdjustMax(t *testing.T) {
 		{input: 0.29, want: 0.30},
 		{input: 0.30, want: 0.30},
 		{input: 0.235, want: 0.24},
+		{input: 0.281, want: 0.30},
+		{input: 0.2800001, want: 0.30},
+		{input: 0.289, want: 0.30},
 		{input: 0.99, want: 1.0},
 		{input: 9.9, want: 10},
 	}
@@ -153,6 +158,18 @@ func TestAdjustMax(t *testing.T) {
 		got := adjustMax(tc.input)
 		if got != tc.want {
 			t.Errorf("result mismatch, input=%g, got=%g, want=%g", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestAdjustMaxProperty(t *testing.T) {
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	const n = 100000
+	for i := 0; i < n; i++ {
+		v := rnd.Float64()
+		v2 := adjustMax(v)
+		if v2 < v {
+			t.Errorf("adjustMax output must not be smaller than input, input=%g, output=%g", v, v2)
 		}
 	}
 }

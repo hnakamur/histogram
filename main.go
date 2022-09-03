@@ -427,6 +427,14 @@ func adjustMax(max float64) float64 {
 	d1 := mustAtoi(s[0:1])
 	d2 := mustAtoi(s[2:3])
 	exp := mustAtoi(s[4:])
+	if max > mustParseFloat(s, float64BitSize) {
+		if d2 == 9 {
+			d1++
+			d2 = 0
+		} else {
+			d2++
+		}
+	}
 	switch d2 {
 	case 1:
 		d2 = 2
@@ -445,6 +453,7 @@ func adjustMax(max float64) float64 {
 func mustAtoi(s string) int {
 	i, err := strconv.Atoi(s)
 	if err != nil {
+		log.Printf("mustAtoi, s=%s, err=%v", s, err)
 		panic("expected integer string")
 	}
 	return i
