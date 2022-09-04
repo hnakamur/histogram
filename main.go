@@ -83,17 +83,21 @@ func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth i
 const stdinFilename = "-"
 
 func readFloat64ValuesFile(filename string) ([]float64, error) {
-	if filename == stdinFilename {
-		return readFloat64Values(os.Stdin)
-	}
-
-	file, err := os.Open(filename)
+	r, err := newReadCloserFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer r.Close()
 
-	return readFloat64Values(file)
+	return readFloat64Values(r)
+}
+
+func newReadCloserFile(filename string) (io.ReadCloser, error) {
+	if filename == stdinFilename {
+		return io.NopCloser(os.Stdin), nil
+	}
+
+	return os.Open(filename)
 }
 
 const float64BitSize = 64
