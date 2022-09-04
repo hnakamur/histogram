@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -454,6 +455,35 @@ func ceilSecondSignificantDigitToMultiplesOfTwoOrFive(max float64) float64 {
 	return mustParseFloat(s2, float64BitSize)
 }
 
+func ceilSecondSignificantDigit(v float64) float64 {
+	log10 := math.Log10(v)
+	if math.IsInf(log10, -1) {
+		return 0
+	}
+	n := int(math.Floor(log10))
+
+	pow10 := math.Pow10(1 - n)
+	ret := v * pow10
+	ret2 := int64(math.Ceil(ret))
+	switch ret2 % 10 {
+	case 1, 3, 7, 9:
+		ret2++
+	}
+	ret3 := float64(ret2) / pow10
+
+	// pow10 := math.Pow10(n - 1)
+	// ret := v / pow10
+	// ret2 := int64(math.Ceil(ret))
+	// switch ret2 % 10 {
+	// case 1, 3, 7, 9:
+	// 	ret2++
+	// }
+	// ret3 := float64(ret2) * pow10
+
+	// log.Printf("v=%g, ret=%g, ret2=%d, ret3=%g", v, ret, ret2, ret3)
+	return ret3
+}
+
 func mustAtoi(s string) int {
 	i, err := strconv.Atoi(s)
 	if err != nil {
@@ -469,4 +499,26 @@ func mustParseFloat(s string, bitSize int) float64 {
 		panic("failed to parse float value")
 	}
 	return f
+}
+
+func formatRangePoint(v float64, minSignificantDigits, maxSignificantDigits int) string {
+	if maxSignificantDigits == 0 {
+		panic("maxSignificantDigits must be greater than zero")
+	}
+	if minSignificantDigits == 0 {
+		panic("minSignificantDigits must be greater than zero")
+	}
+	if maxSignificantDigits < minSignificantDigits {
+		panic("maxSignificantDigits must be greater than or equal to minSignificantDigits")
+	}
+
+	// negative := math.Signbit(v)
+	// signWidth := 0
+	// if negative {
+	// 	signWidth = 1
+	// }
+	// maxWidth := signWidth + len("0.") + maxSignificantDigits - 1 + len("e+00")
+
+	s := fmt.Sprintf("%.*g", maxSignificantDigits, v)
+	return s
 }
