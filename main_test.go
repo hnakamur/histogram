@@ -167,44 +167,6 @@ func TestCeilSecondSignificantDigitToMultiplesOfTwoOrFive(t *testing.T) {
 	}
 }
 
-func TestCeilSecondSignificantDigit(t *testing.T) {
-	testCases := []struct {
-		input float64
-		want  float64
-	}{
-		{input: 0, want: 0},
-		{input: 1, want: 1},
-		{input: 1.41, want: 1.5},
-		{input: 1.449, want: 1.5},
-		{input: 1.45, want: 1.5},
-		{input: 1.5, want: 1.5},
-		{input: 0.155, want: 0.16},
-		{input: 1.55, want: 1.6},
-		{input: 15.5, want: 16},
-		{input: 0.21, want: 0.22},
-		{input: 0.22, want: 0.22},
-		{input: 0.23, want: 0.24},
-		{input: 0.25, want: 0.25},
-		{input: 0.26, want: 0.26},
-		{input: 0.27, want: 0.28},
-		{input: 0.28, want: 0.28},
-		{input: 0.29, want: 0.30},
-		{input: 0.30, want: 0.30},
-		{input: 0.235, want: 0.24},
-		{input: 0.281, want: 0.30},
-		{input: 0.2800001, want: 0.30},
-		{input: 0.289, want: 0.30},
-		{input: 0.99, want: 1.0},
-		{input: 9.9, want: 10},
-	}
-	for _, tc := range testCases {
-		got := ceilSecondSignificantDigit(tc.input)
-		if got != tc.want {
-			t.Errorf("result mismatch, input=%g, got=%g, want=%g", tc.input, got, tc.want)
-		}
-	}
-}
-
 func TestAdjustMaxProperty(t *testing.T) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	const n = 100000
@@ -222,46 +184,5 @@ func BenchmarkAdjustMax(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		v := rnd.Float64()
 		_ = ceilSecondSignificantDigitToMultiplesOfTwoOrFive(v)
-	}
-}
-
-func TestFormatRangePoint(t *testing.T) {
-	const minSignificantDigits = 2
-	const maxSignificantDigits = 2
-
-	testCases := []struct {
-		input float64
-		want  string
-	}{
-		// {input: 0, want: "0.0e+00"},
-		// {input: 0.1, want: "1.0e-01"},
-		// {input: 0.12, want: "1.2e-01"},
-		// {input: 0.145, want: "1.4e-01"},
-		// {input: 0.15, want: "1.5e-01"},
-		// {input: 0.155, want: "1.5e-01"},
-		// {input: 0.1551, want: "1.6e-01"},
-		// {input: 0.16, want: "1.6e-01"},
-		// {input: 1.2, want: "1.2e+00"},
-		// {input: 12, want: "1.2e+01"},
-		// {input: -12, want: "-1.2e+01"},
-
-		{input: 0, want: "0.0e+00"},
-		{input: 0.1, want: "1.0e-01"},
-		{input: 0.12, want: "1.2e-01"},
-		{input: 0.145, want: "1.4e-01"},
-		{input: 0.15, want: "1.5e-01"},
-		{input: 0.155, want: "1.5e-01"},
-		{input: 0.1551, want: "1.6e-01"},
-		{input: 0.16, want: "1.6e-01"},
-		{input: 1.2, want: "1.2e+00"},
-		{input: 1.55, want: "1.5e-01"},
-		{input: 12, want: "1.2e+01"},
-		{input: -12, want: "-1.2e+01"},
-	}
-	for _, tc := range testCases {
-		got := formatRangePoint(tc.input, minSignificantDigits, maxSignificantDigits)
-		if got != tc.want {
-			t.Errorf("result mismatch, input=%g, got=%s, want=%s", tc.input, got, tc.want)
-		}
 	}
 }
