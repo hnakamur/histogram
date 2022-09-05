@@ -93,7 +93,7 @@ func TestHistogramFormatter(t *testing.T) {
 			}
 		}
 
-		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, 2)
+		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, "%.2f")
 		got := formatter.String()
 		want := ` 0.00 ~  1.00   0 |
  1.00 ~  2.00   2 |**
@@ -114,7 +114,7 @@ func TestHistogramFormatter(t *testing.T) {
 	t.Run("allZero", func(t *testing.T) {
 		histogram := NewHistogram(BuildRangePoints[float64](10, 0, 10))
 
-		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, 2)
+		formatter := NewHistogramFormatter(histogram, defaultBarChar, 40, "%.2f")
 		got := formatter.String()
 		want := ` 0.00 ~  1.00  0 |
  1.00 ~  2.00  0 |
