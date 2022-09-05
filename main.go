@@ -421,17 +421,17 @@ func Max[T constraints.Ordered](values ...T) T {
 	return max
 }
 
-func ceilSecondSignificantDigitToMultiplesOfTwoOrFive(max float64) float64 {
-	if max < 0 {
-		panic("negative max")
+func ceilSecondSignificantDigitToMultiplesOfTwoOrFive(v float64) float64 {
+	if v < 0 {
+		return -floorSecondSignificantDigitToMultiplesOfTwoOrFive(-v)
 	}
 
-	s := fmt.Sprintf("%.1e", max)
+	s := fmt.Sprintf("%.1e", v)
 	// s is like 4.6e+01
 	d1 := mustAtoi(s[0:1])
 	d2 := mustAtoi(s[2:3])
 	exp := mustAtoi(s[4:])
-	if max > mustParseFloat(s, float64BitSize) {
+	if v > mustParseFloat(s, float64BitSize) {
 		if d2 == 9 {
 			d1++
 			d2 = 0
@@ -449,6 +449,32 @@ func ceilSecondSignificantDigitToMultiplesOfTwoOrFive(max float64) float64 {
 	case 9:
 		d1++
 		d2 = 0
+	}
+	s2 := fmt.Sprintf("%d.%de%d", d1, d2, exp)
+	return mustParseFloat(s2, float64BitSize)
+}
+
+func floorSecondSignificantDigitToMultiplesOfTwoOrFive(v float64) float64 {
+	if v < 0 {
+		return -ceilSecondSignificantDigitToMultiplesOfTwoOrFive(-v)
+	}
+
+	s := fmt.Sprintf("%.1e", v)
+	// s is like 4.6e+01
+	d1 := mustAtoi(s[0:1])
+	d2 := mustAtoi(s[2:3])
+	exp := mustAtoi(s[4:])
+	if v < mustParseFloat(s, float64BitSize) {
+		if d2 == 0 {
+			d1--
+			d2 = 9
+		} else {
+			d2--
+		}
+	}
+	switch d2 {
+	case 1, 3, 7, 9:
+		d2--
 	}
 	s2 := fmt.Sprintf("%d.%de%d", d1, d2, exp)
 	return mustParseFloat(s2, float64BitSize)

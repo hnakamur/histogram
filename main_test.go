@@ -158,6 +158,10 @@ func TestCeilSecondSignificantDigitToMultiplesOfTwoOrFive(t *testing.T) {
 		{input: 0.289, want: 0.30},
 		{input: 0.99, want: 1.0},
 		{input: 9.9, want: 10},
+		{input: -1, want: -1},
+		{input: -1.1, want: -1},
+		{input: -1.2, want: -1.2},
+		{input: -1.3, want: -1.2},
 	}
 	for _, tc := range testCases {
 		got := ceilSecondSignificantDigitToMultiplesOfTwoOrFive(tc.input)
@@ -171,10 +175,10 @@ func TestCeilSecondSignificantDigitToMultiplesOfTwoOrFiveProperty(t *testing.T) 
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	const n = 100000
 	for i := 0; i < n; i++ {
-		v := rnd.Float64()
+		v := 10 * (rnd.Float64() - 0.5)
 		v2 := ceilSecondSignificantDigitToMultiplesOfTwoOrFive(v)
 		if v2 < v {
-			t.Errorf("adjustMax output must not be smaller than input, input=%g, output=%g", v, v2)
+			t.Errorf("ceilSecondSignificantDigitToMultiplesOfTwoOrFive output must not be smaller than input, input=%g, output=%g", v, v2)
 		}
 	}
 }
@@ -184,5 +188,58 @@ func BenchmarkCeilSecondSignificantDigitToMultiplesOfTwoOrFive(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		v := rnd.Float64()
 		_ = ceilSecondSignificantDigitToMultiplesOfTwoOrFive(v)
+	}
+}
+
+func TestFloorSecondSignificantDigitToMultiplesOfTwoOrFive(t *testing.T) {
+	testCases := []struct {
+		input float64
+		want  float64
+	}{
+		{input: 0, want: 0},
+		{input: 1, want: 1},
+		{input: 1.41, want: 1.4},
+		{input: 1.5, want: 1.5},
+		{input: 1.9, want: 1.8},
+		{input: 0.2, want: 0.2},
+		{input: 0.21, want: 0.2},
+		{input: 0.22, want: 0.22},
+		{input: 0.23, want: 0.22},
+		{input: 0.24, want: 0.24},
+		{input: 0.25, want: 0.25},
+		{input: 0.26, want: 0.26},
+		{input: 0.27, want: 0.26},
+		{input: 0.28, want: 0.28},
+		{input: 0.29, want: 0.28},
+		{input: 0.30, want: 0.30},
+		{input: 0.235, want: 0.22},
+		{input: 0.281, want: 0.28},
+		{input: 0.2800001, want: 0.28},
+		{input: 0.289, want: 0.28},
+		{input: 0.99, want: 0.98},
+		{input: 0.106, want: 0.1},
+		{input: 9.9, want: 9.8},
+		{input: -1, want: -1},
+		{input: -1.1, want: -1.2},
+		{input: -1.2, want: -1.2},
+		{input: -1.3, want: -1.4},
+	}
+	for _, tc := range testCases {
+		got := floorSecondSignificantDigitToMultiplesOfTwoOrFive(tc.input)
+		if got != tc.want {
+			t.Errorf("result mismatch, input=%g, got=%g, want=%g", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestFloorSecondSignificantDigitToMultiplesOfTwoOrFiveProperty(t *testing.T) {
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
+	const n = 100000
+	for i := 0; i < n; i++ {
+		v := 10 * (rnd.Float64() - 0.5)
+		v2 := floorSecondSignificantDigitToMultiplesOfTwoOrFive(v)
+		if v2 > v {
+			t.Errorf("floorSecondSignificantDigitToMultiplesOfTwoOrFive output must not be greater than input, input=%g, output=%g", v, v2)
+		}
 	}
 }
