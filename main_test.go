@@ -167,7 +167,7 @@ func TestCeilSecondSignificantDigitToMultiplesOfTwoOrFive(t *testing.T) {
 	}
 }
 
-func TestAdjustMaxProperty(t *testing.T) {
+func TestCeilSecondSignificantDigitToMultiplesOfTwoOrFiveProperty(t *testing.T) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	const n = 100000
 	for i := 0; i < n; i++ {
@@ -179,7 +179,7 @@ func TestAdjustMaxProperty(t *testing.T) {
 	}
 }
 
-func BenchmarkAdjustMax(b *testing.B) {
+func BenchmarkCeilSecondSignificantDigitToMultiplesOfTwoOrFive(b *testing.B) {
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 	for i := 0; i < b.N; i++ {
 		v := rnd.Float64()
