@@ -1,4 +1,4 @@
-module github.com/hnakamur/histogram-cli
+module github.com/hnakamur/histogram
 
 go 1.19
 
