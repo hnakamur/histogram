@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"flag"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,35 +13,71 @@ import (
 
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
+
+	"github.com/urfave/cli/v2"
 )
 
 const axisAuto = "auto"
 const stdinFilename = "-"
 
 func main() {
-	bucketCount := flag.Int("bucket-count", 10, "histogram bucket count")
-	axisMinStr := flag.String("axis-min", axisAuto, "axis minimum value")
-	axisMaxStr := flag.String("axis-max", axisAuto, "axis maximum value")
-	pointFmt := flag.String("point-fmt", "%.2f", "format string for axis point value")
-	graphWidth := flag.Int("graph-width", 80, "graph column width including labels")
-	flag.Parse()
+	app := &cli.App{
+		Name:  "histogram",
+		Usage: "read numbers from file(s) and show histogram on terminal",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "axis-min",
+				Aliases: []string{"n"},
+				Value:   axisAuto,
+				Usage:   "axis minimum value",
+			},
+			&cli.StringFlag{
+				Name:    "axis-max",
+				Aliases: []string{"x"},
+				Value:   axisAuto,
+				Usage:   "axis maximum value",
+			},
+			&cli.IntFlag{
+				Name:    "bucket-count",
+				Aliases: []string{"c"},
+				Value:   10,
+				Usage:   "histogram bucket count",
+			},
+			&cli.IntFlag{
+				Name:    "graph-width",
+				Aliases: []string{"w"},
+				Value:   80,
+				Usage:   "graph column width including labels",
+			},
+			&cli.StringFlag{
+				Name:    "point-format",
+				Aliases: []string{"f"},
+				Value:   "%.2f",
+				Usage:   "format string for axis point value",
+			},
+		},
+		Action: func(cCtx *cli.Context) error {
+			if cCtx.NArg() != 1 && cCtx.NArg() != 2 {
+				return errors.New("one or two filename arguments needed")
+			}
 
-	axisMin, err := parseAxisRangeEnd(*axisMinStr)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, `axis min value must be "auto" or a floating number.`)
-	}
-	axisMax, err := parseAxisRangeEnd(*axisMaxStr)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, `axis min value must be "auto" or a floating number.`)
-	}
+			axisMin, err := parseAxisRangeEnd(cCtx.String("axis-min"))
+			if err != nil {
+				return errors.New(`axis min value must be a floating number or "auto"`)
+			}
+			axisMax, err := parseAxisRangeEnd(cCtx.String("axis-max"))
+			if err != nil {
+				return errors.New(`axis min value must be a floating number or "auto"`)
+			}
 
-	nArg := flag.NArg()
-	if nArg != 1 && nArg != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s file1\n\nYou can use %q for stdin.\n", os.Args[0], stdinFilename)
-		os.Exit(2)
+			bucketCount := cCtx.Int("bucket-count")
+			graphWidth := cCtx.Int("graph-width")
+			pointFmt := cCtx.String("point-format")
+			args := cCtx.Args().Slice()
+			return run(bucketCount, axisMin, axisMax, graphWidth, pointFmt, args)
+		},
 	}
-
-	if err := run(*bucketCount, axisMin, axisMax, *graphWidth, *pointFmt, flag.Args()); err != nil {
+	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
 }
