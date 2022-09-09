@@ -22,8 +22,9 @@ const stdinFilename = "-"
 
 func main() {
 	app := &cli.App{
-		Name:  "histogram",
-		Usage: "read numbers from file(s) and show histogram on terminal",
+		Name:      "histogram",
+		Usage:     "read numbers from file(s) and show histogram on terminal",
+		UsageText: fmt.Sprintf("histogram [GLOBAL OPTIONS] filename1 [filename2]\n\n   (You can use %q as filename for stdin.)", stdinFilename),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:    "axis-min",
