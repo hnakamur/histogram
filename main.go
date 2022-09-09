@@ -16,6 +16,7 @@ import (
 )
 
 const axisAuto = "auto"
+const stdinFilename = "-"
 
 func main() {
 	bucketCount := flag.Int("bucket-count", 10, "histogram bucket count")
@@ -36,7 +37,7 @@ func main() {
 
 	nArg := flag.NArg()
 	if nArg != 1 && nArg != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: %s file1\n\nYou can use - for stdin.\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s file1\n\nYou can use %q for stdin.\n", os.Args[0], stdinFilename)
 		os.Exit(2)
 	}
 
@@ -69,12 +70,8 @@ func run(bucketCount int, axisMin, axisMax axisRangeEnd, graphWidth int, pointFm
 		if err != nil {
 			return err
 		}
-
 		if len(values) == 0 {
-			if filename == stdinFilename {
-				filename = "stdin"
-			}
-			return fmt.Errorf("no value in %s", filename)
+			return fmt.Errorf("no value in %s", filenameForErrorMessage(filename))
 		}
 
 		valuesList[i] = values
@@ -111,7 +108,12 @@ func run(bucketCount int, axisMin, axisMax axisRangeEnd, graphWidth int, pointFm
 	return nil
 }
 
-const stdinFilename = "-"
+func filenameForErrorMessage(filename string) string {
+	if filename == stdinFilename {
+		return "stdin"
+	}
+	return filename
+}
 
 func readFloat64ValuesFile(filename string) ([]float64, error) {
 	r, err := newReadCloserFile(filename)
