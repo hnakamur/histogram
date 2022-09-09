@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -24,7 +23,7 @@ func main() {
 	app := &cli.App{
 		Name:      "histogram",
 		Version:   Version(),
-		Usage:     "read numbers from file(s) and show histogram on terminal",
+		Usage:     "Read numbers from file(s) and show histogram(s) on terminal",
 		UsageText: fmt.Sprintf("histogram [GLOBAL OPTIONS] filename1 [filename2]\n\n   (You can use %q as filename for stdin.)", stdinFilename),
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -58,26 +57,27 @@ func main() {
 				Usage:   "format string for axis point value",
 			},
 		},
-		Action: func(cCtx *cli.Context) error {
-			if cCtx.NArg() != 1 && cCtx.NArg() != 2 {
-				return errors.New("one or two filename arguments needed")
-			}
+	}
+	app.Action = func(cCtx *cli.Context) error {
+		if cCtx.NArg() != 1 && cCtx.NArg() != 2 {
+			fmt.Fprintf(app.ErrWriter, "One or two filename arguments needed.\nYou can use %q as filename for stdin.\n\n", stdinFilename)
+			cli.ShowAppHelpAndExit(cCtx, 2)
+		}
 
-			axisMin, err := parseAxisRangeEnd(cCtx.String("axis-min"))
-			if err != nil {
-				return errors.New(`axis min value must be a floating number or "auto"`)
-			}
-			axisMax, err := parseAxisRangeEnd(cCtx.String("axis-max"))
-			if err != nil {
-				return errors.New(`axis min value must be a floating number or "auto"`)
-			}
+		axisMin, err := parseAxisRangeEnd(cCtx.String("axis-min"))
+		if err != nil {
+			return fmt.Errorf(`axis min value must be a floating number or "%s"`, axisAuto)
+		}
+		axisMax, err := parseAxisRangeEnd(cCtx.String("axis-max"))
+		if err != nil {
+			return fmt.Errorf(`axis max value must be a floating number or "%s"`, axisAuto)
+		}
 
-			bucketCount := cCtx.Int("bucket-count")
-			graphWidth := cCtx.Int("graph-width")
-			pointFmt := cCtx.String("point-format")
-			args := cCtx.Args().Slice()
-			return run(bucketCount, axisMin, axisMax, graphWidth, pointFmt, args)
-		},
+		bucketCount := cCtx.Int("bucket-count")
+		graphWidth := cCtx.Int("graph-width")
+		pointFmt := cCtx.String("point-format")
+		args := cCtx.Args().Slice()
+		return run(bucketCount, axisMin, axisMax, graphWidth, pointFmt, args)
 	}
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
