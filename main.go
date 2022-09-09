@@ -7,14 +7,14 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/urfave/cli/v2"
 	"golang.org/x/exp/constraints"
 	"golang.org/x/exp/slices"
-
-	"github.com/urfave/cli/v2"
 )
 
 const axisAuto = "auto"
@@ -23,6 +23,7 @@ const stdinFilename = "-"
 func main() {
 	app := &cli.App{
 		Name:      "histogram",
+		Version:   Version(),
 		Usage:     "read numbers from file(s) and show histogram on terminal",
 		UsageText: fmt.Sprintf("histogram [GLOBAL OPTIONS] filename1 [filename2]\n\n   (You can use %q as filename for stdin.)", stdinFilename),
 		Flags: []cli.Flag{
@@ -81,6 +82,14 @@ func main() {
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func Version() string {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "(devel)"
+	}
+	return info.Main.Version
 }
 
 type axisRangeEnd struct {
