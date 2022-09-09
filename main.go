@@ -15,14 +15,24 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+const axisAuto = "auto"
+
 func main() {
 	bucketCount := flag.Int("bucket-count", 10, "histogram bucket count")
-	axisMin := flag.Float64("axis-min", 0, "axis minimum value")
-	axisMax := flag.Float64("axis-max", 10, "axis maximum value")
+	axisMinStr := flag.String("axis-min", axisAuto, "axis minimum value")
+	axisMaxStr := flag.String("axis-max", axisAuto, "axis maximum value")
 	pointFmt := flag.String("point-fmt", "%.2f", "format string for axis point value")
-	fixedAxis := flag.Bool("fixed-axis", false, "if enabled, axis min and max are fixed even if some of values are out of range")
 	graphWidth := flag.Int("graph-width", 80, "graph column width including labels")
 	flag.Parse()
+
+	axisMin, err := parseAxisRangeEnd(*axisMinStr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, `axis min value must be "auto" or a floating number.`)
+	}
+	axisMax, err := parseAxisRangeEnd(*axisMaxStr)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, `axis min value must be "auto" or a floating number.`)
+	}
 
 	nArg := flag.NArg()
 	if nArg != 1 && nArg != 2 {
@@ -30,15 +40,29 @@ func main() {
 		os.Exit(2)
 	}
 
-	if err := run(*bucketCount, *axisMin, *axisMax, *fixedAxis, *graphWidth, *pointFmt, flag.Args()); err != nil {
+	if err := run(*bucketCount, axisMin, axisMax, *graphWidth, *pointFmt, flag.Args()); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth int, pointFmt string, filenames []string) error {
+type axisRangeEnd struct {
+	Auto  bool
+	Value float64
+}
+
+func parseAxisRangeEnd(s string) (axisRangeEnd, error) {
+	if s == axisAuto {
+		return axisRangeEnd{Auto: true}, nil
+	}
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return axisRangeEnd{}, err
+	}
+	return axisRangeEnd{Value: v}, nil
+}
+
+func run(bucketCount int, axisMin, axisMax axisRangeEnd, graphWidth int, pointFmt string, filenames []string) error {
 	fileCount := len(filenames)
-	minList := make([]float64, fileCount)
-	maxList := make([]float64, fileCount)
 	valuesList := make([][]float64, fileCount)
 	for i, filename := range filenames {
 		values, err := readFloat64ValuesFile(filenames[i])
@@ -54,19 +78,26 @@ func run(bucketCount int, axisMin, axisMax float64, fixedAxis bool, graphWidth i
 		}
 
 		valuesList[i] = values
-		minList[i] = Min(values...)
-		maxList[i] = Max(values...)
 	}
 
-	min := Min(minList...)
-	max := Max(maxList...)
-	if !fixedAxis {
-		axisMin = Min(axisMin, min)
-		axisMax = Max(axisMax, max)
-		axisMax = ceilSecondSignificantDigitToMultiplesOfTwoOrFive(axisMax)
+	if axisMin.Auto {
+		minList := make([]float64, fileCount)
+		for i, values := range valuesList {
+			minList[i] = Min(values...)
+		}
+		min := Min(minList...)
+		axisMin.Value = floorSecondSignificantDigitToMultiplesOfTwoOrFive(min)
+	}
+	if axisMax.Auto {
+		maxList := make([]float64, fileCount)
+		for i, values := range valuesList {
+			maxList[i] = Max(values...)
+		}
+		max := Max(maxList...)
+		axisMax.Value = ceilSecondSignificantDigitToMultiplesOfTwoOrFive(max)
 	}
 
-	rangePoints := BuildRangePoints(bucketCount, axisMin, axisMax)
+	rangePoints := BuildRangePoints(bucketCount, axisMin.Value, axisMax.Value)
 	histograms := make([]*Histogram[float64], fileCount)
 	for i, values := range valuesList {
 		histogram := NewHistogram(rangePoints)
@@ -202,7 +233,7 @@ func (f *MultipleHistogramFormatter) LineStrings(graphWidth int, barChar string,
 
 	countAndBarsList := make([][]string, n)
 	for i, f2 := range formatters {
-		countAndBarMaxWidth := countWidths[i] + barMaxWidth
+		countAndBarMaxWidth := len(" ") + countWidths[i] + len(" |") + barMaxWidth
 		padEnd2 := true
 		if i == len(f.histograms)-1 {
 			padEnd2 = padEnd
@@ -252,28 +283,43 @@ func (f *HistogramFormatter) RangeStrings() []string {
 		tickWidth = Max(tickWidth, len(s))
 	}
 
-	ranges := make([]string, len(ticks)-1)
-	for i := range ranges {
+	ranges := make([]string, len(ticks))
+	for i := 0; i < len(ticks)-1; i++ {
 		ranges[i] = fmt.Sprintf("%*s ~ %*s",
 			tickWidth, ticks[i],
 			tickWidth, ticks[i+1])
 	}
+	ranges[len(ticks)-1] = "out of range"
+
+	alignRightStringSlice(ranges)
 	return ranges
 }
 
 func (f *HistogramFormatter) CountStrings() []string {
-	countWidth := 0
-	countStrs := make([]string, len(f.histogram.counts))
+	countStrs := make([]string, len(f.histogram.counts)+1)
 	for i, count := range f.histogram.counts {
 		s := strconv.Itoa(count)
 		countStrs[i] = s
-		countWidth = Max(countWidth, len(s))
 	}
+	countStrs[len(f.histogram.counts)] = strconv.Itoa(f.histogram.outOfRangeCount)
 
-	for i, countStr := range countStrs {
-		countStrs[i] = padStartSpace(countWidth, countStr)
-	}
+	alignRightStringSlice(countStrs)
 	return countStrs
+}
+
+func alignRightStringSlice(ss []string) {
+	w := stringSliceMaxWidth(ss)
+	for i, countStr := range ss {
+		ss[i] = padStartSpace(w, countStr)
+	}
+}
+
+func stringSliceMaxWidth(ss []string) int {
+	w := 0
+	for _, s := range ss {
+		w = Max(w, len(s))
+	}
+	return w
 }
 
 func padStartSpace(targetWidth int, s string) string {
@@ -298,7 +344,7 @@ func (f *HistogramFormatter) BarStrings(barMaxWidth int, barWidthRatio float64, 
 		log.Fatalf("bar max width becomes too small, retry with larger graphWidth, barMaxWidth=%d, graphWidth=%d", barMaxWidth, f.graphWidth)
 	}
 
-	bars := make([]string, len(f.histogram.counts))
+	bars := make([]string, len(f.histogram.counts)+1)
 	for i, count := range f.histogram.counts {
 		barWidth := int(float64(count) * barWidthRatio)
 		if padEnd {
@@ -306,6 +352,9 @@ func (f *HistogramFormatter) BarStrings(barMaxWidth int, barWidthRatio float64, 
 		} else {
 			bars[i] = strings.Repeat(f.barChar, barWidth)
 		}
+	}
+	if padEnd {
+		bars[len(f.histogram.counts)] = strings.Repeat(" ", barMaxWidth)
 	}
 	return bars
 }
@@ -343,8 +392,9 @@ type Number interface {
 }
 
 type Histogram[T Number] struct {
-	rangePoints []T
-	counts      []int
+	rangePoints     []T
+	counts          []int
+	outOfRangeCount int
 }
 
 func NewHistogram[T Number](rangePoints []T) *Histogram[T] {
@@ -367,6 +417,10 @@ func (h *Histogram[T]) AddValues(values []T) {
 }
 
 func (h *Histogram[T]) AddValue(v T) {
+	if v < h.rangePoints[0] || v > h.rangePoints[len(h.rangePoints)-1] {
+		h.outOfRangeCount++
+		return
+	}
 	i := sort.Search(len(h.rangePoints), func(i int) bool { return h.rangePoints[i] > v }) - 1
 	if i < len(h.counts) {
 		h.counts[i]++
@@ -483,7 +537,6 @@ func floorSecondSignificantDigitToMultiplesOfTwoOrFive(v float64) float64 {
 func mustAtoi(s string) int {
 	i, err := strconv.Atoi(s)
 	if err != nil {
-		log.Printf("mustAtoi, s=%s, err=%v", s, err)
 		panic("expected integer string")
 	}
 	return i
